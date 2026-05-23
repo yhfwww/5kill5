@@ -1,0 +1,10 @@
+[package]
+name = "fivekill5-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "fivekill5_core"
+path = "src/lib.rs"

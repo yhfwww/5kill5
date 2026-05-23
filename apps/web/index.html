@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>5KILL5</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Main">
+        <a class="brand" href="#skills" data-route="skills">
+          <img src="/logo.jpg" alt="" />
+          <span>5KILL5</span>
+        </a>
+        <nav class="nav">
+          <a href="#skills" data-route="skills" data-i18n="nav.skills">Skills</a>
+          <a href="#packs" data-route="packs" data-i18n="nav.packs">Packs</a>
+          <a href="#profiles" data-route="profiles" data-i18n="nav.profiles">Profiles</a>
+          <a href="#devices" data-route="devices" data-i18n="nav.devices">Devices</a>
+          <a href="#quality" data-route="quality" data-i18n="nav.quality">Quality</a>
+          <a href="#privacy" data-route="privacy" data-i18n="nav.privacy">Privacy</a>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="view-eyebrow">Private workspace</p>
+            <h1 id="view-title">Skills</h1>
+          </div>
+          <div class="toolbar">
+            <select id="language-select" class="language-select" aria-label="Language">
+              <option value="zh">中文</option>
+              <option value="en">English</option>
+            </select>
+            <label class="icon-button" title="Import SKILL.md" data-i18n-title="button.importSkill">
+              <span aria-hidden="true">+</span>
+              <input id="skill-file" type="file" accept=".md,.markdown,text/markdown" hidden />
+            </label>
+            <button class="icon-button" id="reset-demo" type="button" title="Reset local demo data" data-i18n-title="button.resetDemo">R</button>
+          </div>
+        </header>
+
+        <section id="skills-view" class="view">
+          <div class="split">
+            <section class="panel table-panel">
+              <div class="panel-head">
+                <h2 data-i18n="panel.skillLibrary">Skill Library</h2>
+                <div class="filters">
+                  <input id="skill-search" type="search" placeholder="Search name, tags, trigger" data-i18n-placeholder="placeholder.searchSkills" />
+                  <select id="agent-filter">
+                    <option value="" data-i18n="select.allAgents">All agents</option>
+                    <option value="codex">Codex</option>
+                    <option value="generic">Generic</option>
+                  </select>
+                  <select id="risk-filter">
+                    <option value="" data-i18n="select.allRisk">All risk</option>
+                    <option value="low" data-i18n="risk.low">Low</option>
+                    <option value="medium" data-i18n="risk.medium">Medium</option>
+                    <option value="high" data-i18n="risk.high">High</option>
+                  </select>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th data-i18n="table.name">Name</th>
+                      <th data-i18n="table.version">Version</th>
+                      <th data-i18n="table.tags">Tags</th>
+                      <th data-i18n="table.quality">Quality</th>
+                      <th data-i18n="table.release">Release</th>
+                    </tr>
+                  </thead>
+                  <tbody id="skills-table"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel detail-panel">
+              <div class="panel-head compact">
+                <div>
+                  <h2 id="skill-detail-title">Skill Preview</h2>
+                  <p id="skill-detail-meta" class="muted"></p>
+                </div>
+                <button id="publish-skill" type="button" data-i18n="button.publish">Publish</button>
+              </div>
+              <div id="skill-findings" class="finding-list"></div>
+              <pre id="skill-preview" class="markdown-preview"></pre>
+            </section>
+          </div>
+        </section>
+
+        <section id="packs-view" class="view" hidden>
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-i18n="panel.packBuilder">Pack Builder</h2>
+                <button id="create-pack" type="button" data-i18n="button.newPack">New Pack</button>
+              </div>
+              <div id="pack-list" class="item-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-i18n="panel.selectedPack">Selected Pack</h2>
+                <button id="publish-pack" type="button" data-i18n="button.publish">Publish</button>
+              </div>
+              <div id="pack-editor"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="profiles-view" class="view" hidden>
+          <div class="grid two">
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-i18n="panel.profiles">Profiles</h2>
+                <button id="create-profile" type="button" data-i18n="button.newProfile">New Profile</button>
+              </div>
+              <div id="profile-list" class="item-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-head">
+                <h2 data-i18n="panel.resolvedManifest">Resolved Manifest</h2>
+                <button id="publish-profile" type="button" data-i18n="button.publish">Publish</button>
+              </div>
+              <pre id="manifest-preview" class="json-preview"></pre>
+            </section>
+          </div>
+        </section>
+
+        <section id="devices-view" class="view" hidden>
+          <section class="panel">
+            <div class="panel-head">
+              <h2 data-i18n="panel.devices">Devices</h2>
+              <button id="register-device" type="button" data-i18n="button.register">Register</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-i18n="table.name">Name</th>
+                    <th data-i18n="table.os">OS</th>
+                    <th data-i18n="table.agent">Agent</th>
+                    <th data-i18n="table.targetPath">Target path</th>
+                    <th data-i18n="table.lastApply">Last apply</th>
+                  </tr>
+                </thead>
+                <tbody id="devices-table"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="quality-view" class="view" hidden>
+          <section class="panel">
+            <div class="panel-head">
+              <h2 data-i18n="panel.qualityGate">Quality Gate</h2>
+              <button id="run-quality" type="button" data-i18n="button.run">Run</button>
+            </div>
+            <div id="quality-summary" class="summary-strip"></div>
+            <div id="quality-table" class="finding-list"></div>
+          </section>
+        </section>
+
+        <section id="privacy-view" class="view" hidden>
+          <section class="policy">
+            <h2 data-i18n="panel.privacy">Privacy</h2>
+            <p data-i18n="privacy.storage">5KILL5 stores full Skill content for synchronization. Do not upload secrets, private keys, tokens, customer data, or other sensitive material.</p>
+            <p data-i18n="privacy.usage">Skill content is used for account storage, release manifest generation, device synchronization, and quality checks. It is not used for model training.</p>
+            <p data-i18n="privacy.boundary">The platform manages and distributes Skill files. It does not write, rewrite, repair, or generate Skill content with third-party model APIs.</p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="edit-dialog">
+      <form method="dialog" class="dialog-body">
+        <h2 id="dialog-title">Edit</h2>
+        <div id="dialog-fields"></div>
+        <menu>
+          <button value="cancel" type="submit" data-i18n="button.cancel">Cancel</button>
+          <button id="dialog-save" value="save" type="submit" data-i18n="button.save">Save</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

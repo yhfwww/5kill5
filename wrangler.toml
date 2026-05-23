@@ -1,0 +1,20 @@
+name = "5kill5-api-preview"
+main = "services/api/src/index.ts"
+compatibility_date = "2026-05-22"
+
+routes = [
+  { pattern = "api.5kill5.xyz/*", zone_name = "5kill5.xyz" }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "5kill5_preview"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[[r2_buckets]]
+binding = "SKILL_OBJECTS"
+bucket_name = "5kill5-skills-preview"
+
+[vars]
+ENVIRONMENT = "preview"
+RELEASE_CHANNEL = "stable"

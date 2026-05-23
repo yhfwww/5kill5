@@ -1,0 +1,32 @@
+{
+  "managed_by": "5kill5",
+  "version": 1,
+  "release_id": "rel_demo_001",
+  "profile": {
+    "id": "profile_demo",
+    "name": "Windows laptop / Codex / frontend",
+    "agent_type": "codex",
+    "task_context": "frontend"
+  },
+  "packs": [
+    {
+      "id": "pack_demo",
+      "version": "1.0.0",
+      "skills": ["skill_version_code_review_100"]
+    }
+  ],
+  "skills": [
+    {
+      "skill_id": "skill_code_review",
+      "version_id": "skill_version_code_review_100",
+      "name": "code-review",
+      "object_key": "skills/skill_code_review/1.0.0/SKILL.md",
+      "sha256": "bf7fb8986f7ef6587a0db0c66d7f17f4d58a6361a44745dbf77ea1aeb0210aab",
+      "content": "---\nname: code-review\nversion: 1.0.0\ndescription: Review code changes and identify behavioral risks\ntags:\n  - coding\n  - review\ntriggers:\n  - code review\ncompatibility:\n  agents:\n    - codex\nrisk_level: medium\nauthor: yhfwww\nlicense: GPL-3.0\n---\n\n# Code Review\n\n## Trigger\n\nUse this skill when reviewing code changes, pull requests, or risky diffs.\n\n## Steps\n\n1. Inspect the changed files.\n2. Prioritize correctness, data loss, and security findings.\n3. Report issues with file and line references.\n"
+    }
+  ],
+  "apply": {
+    "strategy": "copy",
+    "target_path_hint": "%USERPROFILE%\\.codex\\skills"
+  }
+}

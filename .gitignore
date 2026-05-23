@@ -1,0 +1,15 @@
+.DS_Store
+Thumbs.db
+
+node_modules/
+dist/
+build/
+.wrangler/
+.dev.vars
+
+target/
+*.pdb
+
+apps/web/.data/
+apps/web/*.log
+crates/**/5kill5.local/
