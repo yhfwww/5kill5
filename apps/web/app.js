@@ -652,6 +652,44 @@ function parseGitHubInput(input) {
 }
 
 /**
+ * Fetch directory contents using GitHub Raw URLs (bypasses API rate limits)
+ */
+async function fetchGitHubRaw(repo, path, branch = "main") {
+  const result = {};
+  path = path.replace(/^\/+|\/+$/g, '');
+  
+  // Try to get SKILL.md first
+  const skillMdPath = `${path}/SKILL.md`;
+  const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${encodeURIComponent(skillMdPath)}`;
+  
+  try {
+    const response = await fetch(rawUrl);
+    if (response.ok) {
+      const content = await response.text();
+      const isBinary = content.length > 0 && (content.charCodeAt(0) === 0 || 
+        (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100))));
+      
+      result[skillMdPath] = {
+        name: "SKILL.md",
+        path: skillMdPath,
+        size: content.length,
+        sha: "",
+        content: isBinary ? btoa(content) : content,
+        isBinary: isBinary,
+        download_url: rawUrl,
+        fetched: true
+      };
+      
+      return result;
+    }
+  } catch (error) {
+    console.warn(`Failed to fetch SKILL.md via raw URL: ${error.message}`);
+  }
+  
+  throw new Error("Failed to fetch SKILL.md via raw URL");
+}
+
+/**
  * Fetch directory contents from GitHub API recursively
  */
 async function fetchGitHubDirectory(repo, path, branch = "main") {
@@ -673,10 +711,17 @@ async function fetchGitHubDirectory(repo, path, branch = "main") {
       const response = await fetch(apiUrl, { headers });
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
-        let errorMsg = `HTTP ${response.status}`;
+        
+        // If rate limited, try fallback to raw URL for SKILL.md
         if (response.status === 403) {
-          errorMsg += " - GitHub API rate limit reached or access forbidden. Try again later or use a different repository.";
-        } else if (response.status === 404) {
+          console.warn("GitHub API rate limited, falling back to raw URL");
+          const fallbackResult = await fetchGitHubRaw(repo, path, branch);
+          Object.assign(result, fallbackResult);
+          return;
+        }
+        
+        let errorMsg = `HTTP ${response.status}`;
+        if (response.status === 404) {
           errorMsg += " - Repository or path not found. Check the repo, path, and branch.";
         }
         if (errorText) {
@@ -1277,6 +1322,11 @@ githubPreviewBtn.addEventListener("click", async () => {
     
     const fileCount = Object.keys(githubFetchedFiles).length;
     let html = `<h4>${fileCount} ${t("preview.fileCount").replace("{count}", fileCount)}</h4>`;
+    
+    // Show fallback notice if only SKILL.md was fetched (rate limit fallback)
+    if (fileCount === 1 && Object.keys(githubFetchedFiles)[0]?.toLowerCase().endsWith("skill.md")) {
+      html += `<p style="color: orange; font-size: 12px; margin-top: 8px;">Note: GitHub API rate limit reached. Only SKILL.md was fetched via raw URL. Other files (scripts, assets, etc.) are not available.</p>`;
+    }
     
     // Group files by type
     const skillFiles = [];
