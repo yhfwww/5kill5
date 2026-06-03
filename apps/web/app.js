@@ -472,7 +472,7 @@ function createSkillFromContent(content, fileName = "SKILL.md") {
     slug: slugify(parsed.meta.name || fileName),
     version: parsed.meta.version || "0.0.0",
     description: parsed.meta.description || "",
-    officialTags: parsed.meta.tags || [],
+    officialTags: extractTags(parsed.meta),
     userTags: [],
     triggers: parsed.meta.triggers || [],
     compatibility: parsed.meta.compatibility || { agents: ["generic"] },
@@ -498,49 +498,93 @@ function parseSkill(content, fileName) {
   }
 
   const lines = match[1].split(/\r?\n/);
-  let key = "";
-  let nested = "";
+  // Stack-based parser: tracks nesting via indentation
+  // Each entry: { container, key, indent }
+  //   container[key] is the current block being parsed
+  const stack = [{ container: meta, key: null, indent: -1 }];
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    const top = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    const child = line.match(/^\s{2}([A-Za-z0-9_-]+):\s*(.*)$/);
-    const item = line.match(/^\s*-\s*(.*)$/);
+    const indent = line.search(/\S/);
+    const trimmed = line.trim();
 
-    if (top) {
-      key = top[1];
-      nested = "";
-      if (top[2]) {
-        meta[key] = scalar(top[2]);
-      } else if (key === "compatibility") {
-        meta.compatibility = {};
+    // Pop stack until we find the parent at a lower indent
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1];
+
+    // Key: value
+    const kvMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (kvMatch) {
+      const key = kvMatch[1];
+      const val = kvMatch[2];
+
+      if (val) {
+        // Inline value
+        if (val === "[]") {
+          parent.container[key] = [];
+        } else {
+          parent.container[key] = scalar(val);
+        }
       } else {
-        meta[key] = [];
+        // Block value — create placeholder object, push to stack
+        parent.container[key] = {};
+        stack.push({ container: parent.container, key, indent });
       }
       continue;
     }
 
-    if (child && key === "compatibility") {
-      nested = child[1];
-      meta.compatibility[nested] = child[2] ? scalar(child[2]) : [];
+    // List item: - value
+    const itemMatch = trimmed.match(/^-\s+(.*)$/);
+    if (itemMatch) {
+      if (parent.key !== null) {
+        // Convert placeholder object to array on first list item
+        if (!Array.isArray(parent.container[parent.key])) {
+          parent.container[parent.key] = [];
+        }
+        parent.container[parent.key].push(scalar(itemMatch[1]));
+      }
       continue;
     }
+  }
 
-    if (item && key) {
-      if (key === "compatibility" && nested) {
-        meta.compatibility[nested].push(scalar(item[1]));
-      } else {
-        if (!Array.isArray(meta[key])) meta[key] = [];
-        meta[key].push(scalar(item[1]));
+  // Clean up: remove empty placeholder objects that never received children
+  function cleanUp(obj) {
+    for (const key of Object.keys(obj)) {
+      if (obj[key] === undefined) {
+        delete obj[key];
+      } else if (typeof obj[key] === "object" && obj[key] !== null && !Array.isArray(obj[key])) {
+        if (Object.keys(obj[key]).length === 0) {
+          delete obj[key];
+        } else {
+          cleanUp(obj[key]);
+        }
       }
     }
   }
+  cleanUp(meta);
 
   return { meta, body: content.slice(match[0].length) };
 }
 
 function scalar(value) {
   return value.replace(/^["']|["']$/g, "").trim();
+}
+
+/**
+ * Extract tags from parsed YAML metadata.
+ * Supports top-level `tags` and nested `metadata.openclaw.tags`.
+ */
+function extractTags(meta) {
+  if (meta.tags && Array.isArray(meta.tags) && meta.tags.length > 0) {
+    return meta.tags;
+  }
+  if (meta.metadata?.openclaw?.tags && Array.isArray(meta.metadata.openclaw.tags)) {
+    return meta.metadata.openclaw.tags;
+  }
+  return [];
 }
 
 function slugify(value) {
@@ -705,8 +749,9 @@ async function fetchGitHubRaw(repo, path, branch = "main") {
   path = path.replace(/^\/+|\/+$/g, '');
   
   // Try to get SKILL.md first
-  const skillMdPath = `${path}/SKILL.md`;
-  const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${encodeURIComponent(skillMdPath)}`;
+  const skillMdPath = path ? `${path}/SKILL.md` : 'SKILL.md';
+  const encodedPath = skillMdPath.split('/').map(encodeURIComponent).join('/');
+  const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${encodedPath}`;
   
   try {
     const response = await fetch(rawUrl);
@@ -904,7 +949,7 @@ function createSkillFromGitHub(repo, branch, files) {
     slug: slugify(parsed.meta.name || skillDirName),
     version: parsed.meta.version || "0.0.0",
     description: parsed.meta.description || "",
-    officialTags: parsed.meta.tags || [],
+    officialTags: extractTags(parsed.meta),
     userTags: [],
     triggers: parsed.meta.triggers || [],
     compatibility: parsed.meta.compatibility || { agents: ["generic"] },
@@ -1482,6 +1527,31 @@ githubPreviewBtn.addEventListener("click", async () => {
     // Show fallback notice if only SKILL.md was fetched (rate limit fallback)
     if (fileCount === 1 && Object.keys(githubFetchedFiles)[0]?.toLowerCase().endsWith("skill.md")) {
       html += `<p style="color: orange; font-size: 12px; margin-top: 8px;">Note: GitHub API rate limit reached. Only SKILL.md was fetched via raw URL. Other files (scripts, assets, etc.) are not available.</p>`;
+    }
+    
+    // Parse SKILL.md and show metadata preview (name, description, tags, etc.)
+    for (const [filePath, file] of Object.entries(githubFetchedFiles)) {
+      if (filePath.toLowerCase().endsWith("skill.md") && file.content && !file.isBinary) {
+        try {
+          const parsed = parseSkill(file.content, filePath);
+          const tags = extractTags(parsed.meta);
+          html += `<div class="skill-meta-preview" style="margin: 10px 0; padding: 10px; background: var(--surface, #f5f5f5); border-radius: 6px; font-size: 13px;">`;
+          html += `<div style="margin-bottom: 4px;"><strong>${escapeHtml(parsed.meta.name || "Unknown")}</strong> <span style="color: var(--muted, #888);">${escapeHtml(parsed.meta.version || "")}</span></div>`;
+          if (parsed.meta.description) {
+            html += `<div style="color: var(--muted, #666); margin-bottom: 6px;">${escapeHtml(parsed.meta.description)}</div>`;
+          }
+          if (parsed.meta.author) {
+            html += `<div style="color: var(--muted, #888); margin-bottom: 4px;">by ${escapeHtml(parsed.meta.author)}</div>`;
+          }
+          if (tags.length > 0) {
+            html += `<div class="tag-row" style="margin-top: 4px;">${tags.map(tag => `<span class="tag official">${escapeHtml(tag)}</span>`).join(" ")}</div>`;
+          }
+          html += `</div>`;
+        } catch (e) {
+          // Ignore parse errors in preview
+        }
+        break;
+      }
     }
     
     // Group files by type
