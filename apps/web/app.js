@@ -195,6 +195,8 @@ const translations = {
     "finding.format.semver.recommendation": "Use a version such as 1.0.0.",
     "finding.format.required_sections.message": "Required sections are incomplete.",
     "finding.format.required_sections.recommendation": "Include ## Trigger and ## Steps sections.",
+    "finding.format.minimal_structure.message": "No section headers found.",
+    "finding.format.minimal_structure.recommendation": "Consider adding section headers to structure your skill content.",
     "finding.security.secret_patterns.message": "Potential secret-like value found.",
     "finding.security.secret_patterns.recommendation": "Review the evidence and remove secrets before upload.",
     "finding.security.destructive_commands.message": "Potential destructive command found.",
@@ -321,6 +323,8 @@ const translations = {
     "finding.format.semver.recommendation": "请使用类似 1.0.0 的版本号。",
     "finding.format.required_sections.message": "必需章节不完整。",
     "finding.format.required_sections.recommendation": "请包含 ## Trigger 和 ## Steps 章节。",
+    "finding.format.minimal_structure.message": "未找到章节标题。",
+    "finding.format.minimal_structure.recommendation": "建议添加章节标题来结构化您的技能内容。",
     "finding.security.secret_patterns.message": "发现疑似密钥或敏感 Token。",
     "finding.security.secret_patterns.recommendation": "上传前请检查证据并移除敏感信息。",
     "finding.security.destructive_commands.message": "发现疑似破坏性命令。",
@@ -559,8 +563,11 @@ function runQualityGate(skill) {
     findings.push(finding("blocker", "format.semver", `Invalid SemVer: ${skill.version}`, "Use a version such as 1.0.0."));
   }
 
-  if (!/^##\s+Trigger\b/im.test(content) || !/^##\s+Steps\b/im.test(content)) {
-    findings.push(finding("blocker", "format.required_sections", "Required sections are incomplete", "Include ## Trigger and ## Steps sections."));
+  // Check for any section headers (flexible - not all skills use Trigger/Steps format)
+  // A skill should have at least one markdown section header (# or ##)
+  const hasAnySection = /^#{1,2}\s+\S+/im.test(content);
+  if (!hasAnySection) {
+    findings.push(finding("low", "format.minimal_structure", "No section headers found", "Consider adding section headers to structure your skill content."));
   }
 
   const securityRules = [
