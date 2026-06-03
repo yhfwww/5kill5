@@ -616,6 +616,18 @@ function lineOf(content, index) {
 // ============ GitHub Import Functions ============
 
 /**
+ * Convert ArrayBuffer to Base64 string
+ */
+function arrayBufferToBase64(buffer) {
+  const binary = [];
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary.push(String.fromCharCode(bytes[i]));
+  }
+  return btoa(binary.join(""));
+}
+
+/**
  * Parse GitHub URL or shorthand to extract repo and path
  * Supports formats:
  * - https://github.com/owner/repo/tree/branch/path
@@ -774,9 +786,22 @@ async function fetchGitHubDirectory(repo, path, branch = "main") {
                 headers: { "User-Agent": "5kill5/1.0.0" }
               });
               if (fileResponse.ok) {
-                content = await fileResponse.text();
-                isBinary = content.length > 0 && (content.charCodeAt(0) === 0 || 
-                  (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100))));
+                const contentType = fileResponse.headers.get("content-type") || "";
+                // Check if binary based on content type or file extension
+                const isBinaryType = contentType.startsWith("image/") || 
+                  contentType.startsWith("audio/") || 
+                  contentType.startsWith("video/") ||
+                  /\.(jpg|jpeg|png|gif|mp3|mp4|pdf|zip|bin)$/i.test(item.name);
+                
+                if (isBinaryType) {
+                  const buffer = await fileResponse.arrayBuffer();
+                  content = arrayBufferToBase64(buffer);
+                  isBinary = true;
+                } else {
+                  content = await fileResponse.text();
+                  isBinary = content.length > 0 && (content.charCodeAt(0) === 0 || 
+                    (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100))));
+                }
                 fetchedOk = true;
               }
             } catch (fetchError) {
@@ -789,7 +814,7 @@ async function fetchGitHubDirectory(repo, path, branch = "main") {
               path: item.path,
               size: item.size,
               sha: item.sha,
-              content: isBinary ? btoa(content) : content,
+              content: content,
               isBinary: isBinary,
               download_url: item.download_url,
               fetched: fetchedOk
