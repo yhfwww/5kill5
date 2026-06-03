@@ -33,11 +33,25 @@ npm run web:dev
 
 ## CLI 示例
 
+### Rust CLI
+
 ```bash
 cargo build -p 5kill5
 5kill5 plan --manifest fixtures/demo-release.json --target ./tmp-skills
 5kill5 apply --manifest fixtures/demo-release.json --target ./tmp-skills --yes
 5kill5 status --target ./tmp-skills
+```
+
+### Python CLI
+
+Python 版本 CLI 位于 `cli/` 目录，可独立安装使用：
+
+```bash
+cd cli
+pip install .
+fivekill5 --help
+fivekill5 plan --manifest fixtures/demo-release.json --target ./tmp-skills
+fivekill5 apply --manifest fixtures/demo-release.json --target ./tmp-skills --yes
 ```
 
 更多实现说明见 `docs/mvp-implementation.md`。

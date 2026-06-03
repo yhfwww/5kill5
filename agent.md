@@ -16,6 +16,7 @@
 ├── crates/
 │   ├── 5kill5-core/         # Rust 核心库
 │   └── 5kill5-cli/           # Rust CLI
+├── cli/                     # Python CLI (fivekill5)
 ├── docs/                    # 需求和技术文档
 └── fixtures/                # 测试数据
 ```
@@ -70,6 +71,57 @@ DistributionPlan: { release_id, target_dir, items }
 cargo build -p 5kill5
 ./target/debug/5kill5 help
 ```
+
+## Python CLI (fivekill5)
+
+Python 版本 CLI 提供与 Rust CLI 相同的功能集，使用 Typer 和 Rich 框架构建。
+
+### 安装
+
+```bash
+cd cli
+pip install .
+```
+
+### 命令
+
+Python CLI 的命令与 Rust CLI 完全一致：
+
+| 命令 | 说明 |
+|------|------|
+| `fivekill5 auth login` | 设备登录认证 |
+| `fivekill5 auth status` | 查看认证状态 |
+| `fivekill5 device register --name <name>` | 注册设备 |
+| `fivekill5 targets set --agent <agent> --path <path>` | 设置目标路径 |
+| `fivekill5 profiles --manifest <path>` | 列出 profiles |
+| `fivekill5 pull --profile <profile> --manifest <path>` | 拉取 manifest |
+| `fivekill5 plan --manifest <path> --target <dir>` | 预览部署计划 |
+| `fivekill5 apply --manifest <path> --target <dir> [--yes]` | 执行部署 |
+| `fivekill5 status --target <dir>` | 查看部署状态 |
+| `fivekill5 rollback --target <dir>` | 回滚上一次部署 |
+| `fivekill5 cache clear` | 清除缓存 |
+
+### 项目结构
+
+```
+cli/
+├── pyproject.toml          # 项目配置和依赖
+├── README.md               # Python CLI 说明文档
+├── src/fivekill5/
+│   ├── __init__.py         # 包初始化
+│   ├── cli.py              # CLI 命令定义
+│   ├── manifest.py         # ReleaseManifest 解析
+│   ├── distribution.py     # Plan/Apply/Rollback 实现
+│   └── quality.py          # 质量扫描功能
+├── test-cli.bat            # Windows 测试脚本
+└── test-cli.sh             # Unix/Linux 测试脚本
+```
+
+### 依赖
+
+- `typer>=0.12.0` - CLI 框架
+- `rich>=13.7.0` - 终端富文本输出
+- `click>=8.1.0` - 命令行工具库
 
 ## 质量扫描规则 (quality.rs)
 
