@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fivekill5"
+version = "0.1.0"
+description = "5KILL5 Skill Manager CLI"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+    "click>=8.1.0",
+]
+
+[project.scripts]
+fivekill5 = "fivekill5.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
