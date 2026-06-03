@@ -657,26 +657,65 @@ function parseGitHubInput(input) {
 async function fetchGitHubDirectory(repo, path, branch = "main") {
   const result = {};
   
+  // GitHub API requires a User-Agent header
+  const headers = {
+    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "5kill5/1.0.0"
+  };
+  
   async function fetchDir(dirPath) {
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/${dirPath}${branch ? `?ref=${branch}` : ''}`;
+    // Cleanup path - remove leading/trailing slashes
+    dirPath = dirPath.replace(/^\/+|\/+$/g, '');
+    const query = branch ? `?ref=${encodeURIComponent(branch)}` : '';
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(dirPath)}${query}`;
     
     try {
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, { headers });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const errorText = await response.text().catch(() => '');
+        let errorMsg = `HTTP ${response.status}`;
+        if (response.status === 403) {
+          errorMsg += " - GitHub API rate limit reached or access forbidden. Try again later or use a different repository.";
+        } else if (response.status === 404) {
+          errorMsg += " - Repository or path not found. Check the repo, path, and branch.";
+        }
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.message) errorMsg += ` (${errorJson.message})`;
+          } catch (e) {}
+        }
+        throw new Error(errorMsg);
       }
       
       const items = await response.json();
       
+      if (!Array.isArray(items)) {
+        throw new Error("API returned unexpected format - ensure the path is a directory");
+      }
+      
       for (const item of items) {
         if (item.type === "file") {
-          // Fetch file content
-          const fileResponse = await fetch(item.download_url);
-          if (fileResponse.ok) {
-            const content = await fileResponse.text();
-            // Calculate size for binary detection (simple heuristic)
-            const isBinary = content.charCodeAt(0) === 0 || 
-              (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100)));
+          try {
+            // Try to fetch file content, but skip if it fails (e.g., large files)
+            let content = "";
+            let isBinary = false;
+            let fetchedOk = false;
+            
+            try {
+              const fileResponse = await fetch(item.download_url, { 
+                headers: { "User-Agent": "5kill5/1.0.0" }
+              });
+              if (fileResponse.ok) {
+                content = await fileResponse.text();
+                isBinary = content.length > 0 && (content.charCodeAt(0) === 0 || 
+                  (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100))));
+                fetchedOk = true;
+              }
+            } catch (fetchError) {
+              // If we can't fetch the file content, skip it but log
+              console.warn(`Skipping ${item.path}: ${fetchError.message}`);
+            }
             
             result[item.path] = {
               name: item.name,
@@ -685,8 +724,11 @@ async function fetchGitHubDirectory(repo, path, branch = "main") {
               sha: item.sha,
               content: isBinary ? btoa(content) : content,
               isBinary: isBinary,
-              download_url: item.download_url
+              download_url: item.download_url,
+              fetched: fetchedOk
             };
+          } catch (fileError) {
+            console.warn(`Skipping ${item.path}: ${fileError.message}`);
           }
         } else if (item.type === "dir") {
           // Recursively fetch subdirectory
@@ -720,7 +762,17 @@ function createSkillFromGitHub(repo, branch, files) {
   }
   
   const skillMd = files[skillMdPath];
-  const content = skillMd.isBinary ? atob(skillMd.content) : skillMd.content;
+  let content = skillMd.content || "";
+  
+  // Handle binary encoded content
+  if (skillMd.isBinary) {
+    try {
+      content = atob(content);
+    } catch (e) {
+      // If we can't decode, use what we have or skip
+    }
+  }
+  
   const parsed = parseSkill(content, skillMdPath);
   
   // Extract skill name from path
@@ -736,7 +788,8 @@ function createSkillFromGitHub(repo, branch, files) {
         size: file.size,
         sha: file.sha,
         content: file.content,
-        isBinary: file.isBinary
+        isBinary: file.isBinary,
+        fetched: file.fetched
       };
     }
   }
@@ -1228,10 +1281,14 @@ githubPreviewBtn.addEventListener("click", async () => {
     // Group files by type
     const skillFiles = [];
     const otherFiles = [];
+    let hasSkilledMd = false;
     
     for (const [filePath, file] of Object.entries(githubFetchedFiles)) {
       if (filePath.toLowerCase().endsWith("skill.md")) {
         skillFiles.push({ path: filePath, ...file });
+        if (file.fetched !== false) {
+          hasSkilledMd = true;
+        }
       } else {
         otherFiles.push({ path: filePath, ...file });
       }
@@ -1240,7 +1297,8 @@ githubPreviewBtn.addEventListener("click", async () => {
     if (skillFiles.length > 0) {
       html += `<h4>${t("preview.skills")}</h4><ul>`;
       for (const f of skillFiles) {
-        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})</span></li>`;
+        const statusBadge = f.fetched === false ? ' <span style="color: orange;">(content not fetched)</span>' : '';
+        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})${statusBadge}</span></li>`;
       }
       html += `</ul>`;
     }
@@ -1248,7 +1306,8 @@ githubPreviewBtn.addEventListener("click", async () => {
     if (otherFiles.length > 0) {
       html += `<h4>${t("preview.others")}</h4><ul>`;
       for (const f of otherFiles.slice(0, 20)) { // Limit to first 20
-        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})</span></li>`;
+        const statusBadge = f.fetched === false ? ' <span style="color: orange;">(content not fetched)</span>' : '';
+        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})${statusBadge}</span></li>`;
       }
       if (otherFiles.length > 20) {
         html += `<li>... and ${otherFiles.length - 20} more files</li>`;
@@ -1257,7 +1316,7 @@ githubPreviewBtn.addEventListener("click", async () => {
     }
     
     githubPreview.innerHTML = html;
-    githubImportBtn.disabled = skillFiles.length === 0;
+    githubImportBtn.disabled = !hasSkilledMd;
     githubPreviewBtn.disabled = false;
   } catch (error) {
     githubPreview.innerHTML = `<p class="error">${t("error.fetchFailed")}: ${error.message}</p>`;
