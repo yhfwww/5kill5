@@ -67,6 +67,22 @@ button.primary {
   color: var(--accent-ink);
 }
 
+button.delete-skill-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+button.delete-skill-btn:hover {
+  background: rgba(180, 35, 24, 0.1);
+  color: var(--danger);
+}
+
 button:disabled {
   color: var(--muted);
   cursor: not-allowed;

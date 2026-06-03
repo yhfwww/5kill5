@@ -1011,6 +1011,7 @@ function renderSkills() {
         <td><span class="tag-row">${skill.tags.slice(0, 3).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</span></td>
         <td>${quality}</td>
         <td>${release}</td>
+        <td><button class="delete-skill-btn" data-skill-id="${skill.id}" title="Delete">✕</button></td>
       </tr>`;
     })
     .join("");
@@ -1020,6 +1021,24 @@ function renderSkills() {
       selectedSkillId = row.dataset.skillId;
       saveState();
       render();
+    });
+  });
+
+  // Add delete button event listeners
+  document.querySelectorAll(".delete-skill-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const skillId = btn.dataset.skillId;
+      const skill = state.skills.find((s) => s.id === skillId);
+      
+      if (confirm(`Are you sure you want to delete "${skill?.name || skillId}"?`)) {
+        state.skills = state.skills.filter((s) => s.id !== skillId);
+        if (selectedSkillId === skillId) {
+          selectedSkillId = state.skills[0]?.id || null;
+        }
+        saveState();
+        render();
+      }
     });
   });
 
