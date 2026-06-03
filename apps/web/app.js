@@ -168,7 +168,25 @@ const translations = {
     "alert.packBlocked": "Pack contains blocked skills.",
     "alert.profileUnpublishedPacks": "Profile contains unpublished packs.",
     "alert.zipBrowserPreview": "ZIP files are accepted by the Cloudflare import API; this browser preview imports SKILL.md files.",
-    "privacy.storage": "5KILL5 stores full Skill content for synchronization. Do not upload secrets, private keys, tokens, customer data, or other sensitive material.",
+    "button.importGithub": "Import from GitHub",
+    "dialog.importGithub": "Import from GitHub",
+    "field.githubRepo": "Repository (owner/repo)",
+    "field.githubPath": "Path to skill directory",
+    "field.githubBranch": "Branch (optional)",
+    "button.import": "Import",
+    "button.cancel": "Cancel",
+    "button.preview": "Preview",
+    "loading.fetching": "Fetching...",
+    "error.invalidUrl": "Invalid GitHub URL or repository path",
+    "error.fetchFailed": "Failed to fetch repository contents",
+    "error.noSkillMd": "SKILL.md not found in this directory",
+    "preview.title": "Import Preview",
+    "preview.fileCount": "{count} files will be imported",
+    "preview.skills": "Skill Files",
+    "preview.others": "Other Files",
+    "confirm.import": "Confirm Import",
+    "status.importing": "Importing...",
+    "success.imported": "Successfully imported {name}",
     "privacy.usage": "Skill content is used for account storage, release manifest generation, device synchronization, and quality checks. It is not used for model training.",
     "privacy.boundary": "The platform manages and distributes Skill files. It does not write, rewrite, repair, or generate Skill content with third-party model APIs.",
     "finding.format.required_frontmatter.message": "Required manifest field is missing.",
@@ -177,6 +195,8 @@ const translations = {
     "finding.format.semver.recommendation": "Use a version such as 1.0.0.",
     "finding.format.required_sections.message": "Required sections are incomplete.",
     "finding.format.required_sections.recommendation": "Include ## Trigger and ## Steps sections.",
+    "finding.format.minimal_structure.message": "No section headers found.",
+    "finding.format.minimal_structure.recommendation": "Consider adding section headers to structure your skill content.",
     "finding.security.secret_patterns.message": "Potential secret-like value found.",
     "finding.security.secret_patterns.recommendation": "Review the evidence and remove secrets before upload.",
     "finding.security.destructive_commands.message": "Potential destructive command found.",
@@ -275,6 +295,25 @@ const translations = {
     "alert.packBlocked": "组合包包含被阻止发布的技能。",
     "alert.profileUnpublishedPacks": "配置包含未发布的组合包。",
     "alert.zipBrowserPreview": "ZIP 文件由 Cloudflare 导入 API 接收；当前浏览器预览只导入 SKILL.md 文件。",
+    "button.importGithub": "从 GitHub 导入",
+    "dialog.importGithub": "从 GitHub 导入",
+    "field.githubRepo": "仓库 (owner/repo)",
+    "field.githubPath": "Skill 目录路径",
+    "field.githubBranch": "分支（可选）",
+    "button.import": "导入",
+    "button.cancel": "取消",
+    "button.preview": "预览",
+    "loading.fetching": "获取中...",
+    "error.invalidUrl": "无效的 GitHub URL 或仓库路径",
+    "error.fetchFailed": "获取仓库内容失败",
+    "error.noSkillMd": "未在该目录中找到 SKILL.md",
+    "preview.title": "导入预览",
+    "preview.fileCount": "将导入 {count} 个文件",
+    "preview.skills": "Skill 文件",
+    "preview.others": "其他文件",
+    "confirm.import": "确认导入",
+    "status.importing": "导入中...",
+    "success.imported": "成功导入 {name}",
     "privacy.storage": "5KILL5 会保存完整 Skill 内容用于同步。请不要上传密钥、私钥、Token、客户数据或其他敏感材料。",
     "privacy.usage": "Skill 内容用于账号存储、发布 manifest 生成、设备同步和质量检查，不用于模型训练。",
     "privacy.boundary": "平台只管理和分发 Skill 文件，不使用第三方模型 API 写作、改写、修复或生成 Skill 内容。",
@@ -284,6 +323,8 @@ const translations = {
     "finding.format.semver.recommendation": "请使用类似 1.0.0 的版本号。",
     "finding.format.required_sections.message": "必需章节不完整。",
     "finding.format.required_sections.recommendation": "请包含 ## Trigger 和 ## Steps 章节。",
+    "finding.format.minimal_structure.message": "未找到章节标题。",
+    "finding.format.minimal_structure.recommendation": "建议添加章节标题来结构化您的技能内容。",
     "finding.security.secret_patterns.message": "发现疑似密钥或敏感 Token。",
     "finding.security.secret_patterns.recommendation": "上传前请检查证据并移除敏感信息。",
     "finding.security.destructive_commands.message": "发现疑似破坏性命令。",
@@ -303,11 +344,58 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function showToast(message, duration = 3000) {
+  const existing = document.getElementById("toast");
+  if (existing) existing.remove();
+  
+  const toast = document.createElement("div");
+  toast.id = "toast";
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+  `;
+  
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  `;
+  document.head.appendChild(style);
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s";
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
 function loadState() {
   const raw = localStorage.getItem(storageKey);
   if (raw) {
     try {
-      return JSON.parse(raw);
+      const data = JSON.parse(raw);
+      // Migrate old tags → officialTags/userTags
+      if (data.skills) {
+        data.skills.forEach((skill) => {
+          if (skill.officialTags === undefined) {
+            skill.officialTags = skill.tags || [];
+            skill.userTags = skill.userTags || [];
+            delete skill.tags;
+          }
+        });
+      }
+      return data;
     } catch {
       localStorage.removeItem(storageKey);
     }
@@ -384,7 +472,8 @@ function createSkillFromContent(content, fileName = "SKILL.md") {
     slug: slugify(parsed.meta.name || fileName),
     version: parsed.meta.version || "0.0.0",
     description: parsed.meta.description || "",
-    tags: parsed.meta.tags || [],
+    officialTags: extractTags(parsed.meta),
+    userTags: [],
     triggers: parsed.meta.triggers || [],
     compatibility: parsed.meta.compatibility || { agents: ["generic"] },
     riskLevel: parsed.meta.risk_level || "medium",
@@ -409,49 +498,93 @@ function parseSkill(content, fileName) {
   }
 
   const lines = match[1].split(/\r?\n/);
-  let key = "";
-  let nested = "";
+  // Stack-based parser: tracks nesting via indentation
+  // Each entry: { container, key, indent }
+  //   container[key] is the current block being parsed
+  const stack = [{ container: meta, key: null, indent: -1 }];
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    const top = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    const child = line.match(/^\s{2}([A-Za-z0-9_-]+):\s*(.*)$/);
-    const item = line.match(/^\s*-\s*(.*)$/);
+    const indent = line.search(/\S/);
+    const trimmed = line.trim();
 
-    if (top) {
-      key = top[1];
-      nested = "";
-      if (top[2]) {
-        meta[key] = scalar(top[2]);
-      } else if (key === "compatibility") {
-        meta.compatibility = {};
+    // Pop stack until we find the parent at a lower indent
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1];
+
+    // Key: value
+    const kvMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (kvMatch) {
+      const key = kvMatch[1];
+      const val = kvMatch[2];
+
+      if (val) {
+        // Inline value
+        if (val === "[]") {
+          parent.container[key] = [];
+        } else {
+          parent.container[key] = scalar(val);
+        }
       } else {
-        meta[key] = [];
+        // Block value — create placeholder object, push to stack
+        parent.container[key] = {};
+        stack.push({ container: parent.container, key, indent });
       }
       continue;
     }
 
-    if (child && key === "compatibility") {
-      nested = child[1];
-      meta.compatibility[nested] = child[2] ? scalar(child[2]) : [];
+    // List item: - value
+    const itemMatch = trimmed.match(/^-\s+(.*)$/);
+    if (itemMatch) {
+      if (parent.key !== null) {
+        // Convert placeholder object to array on first list item
+        if (!Array.isArray(parent.container[parent.key])) {
+          parent.container[parent.key] = [];
+        }
+        parent.container[parent.key].push(scalar(itemMatch[1]));
+      }
       continue;
     }
+  }
 
-    if (item && key) {
-      if (key === "compatibility" && nested) {
-        meta.compatibility[nested].push(scalar(item[1]));
-      } else {
-        if (!Array.isArray(meta[key])) meta[key] = [];
-        meta[key].push(scalar(item[1]));
+  // Clean up: remove empty placeholder objects that never received children
+  function cleanUp(obj) {
+    for (const key of Object.keys(obj)) {
+      if (obj[key] === undefined) {
+        delete obj[key];
+      } else if (typeof obj[key] === "object" && obj[key] !== null && !Array.isArray(obj[key])) {
+        if (Object.keys(obj[key]).length === 0) {
+          delete obj[key];
+        } else {
+          cleanUp(obj[key]);
+        }
       }
     }
   }
+  cleanUp(meta);
 
   return { meta, body: content.slice(match[0].length) };
 }
 
 function scalar(value) {
   return value.replace(/^["']|["']$/g, "").trim();
+}
+
+/**
+ * Extract tags from parsed YAML metadata.
+ * Supports top-level `tags` and nested `metadata.openclaw.tags`.
+ */
+function extractTags(meta) {
+  if (meta.tags && Array.isArray(meta.tags) && meta.tags.length > 0) {
+    return meta.tags;
+  }
+  if (meta.metadata?.openclaw?.tags && Array.isArray(meta.metadata.openclaw.tags)) {
+    return meta.metadata.openclaw.tags;
+  }
+  return [];
 }
 
 function slugify(value) {
@@ -486,8 +619,11 @@ function runQualityGate(skill) {
     findings.push(finding("blocker", "format.semver", `Invalid SemVer: ${skill.version}`, "Use a version such as 1.0.0."));
   }
 
-  if (!/^##\s+Trigger\b/im.test(content) || !/^##\s+Steps\b/im.test(content)) {
-    findings.push(finding("blocker", "format.required_sections", "Required sections are incomplete", "Include ## Trigger and ## Steps sections."));
+  // Check for any section headers (flexible - not all skills use Trigger/Steps format)
+  // A skill should have at least one markdown section header (# or ##)
+  const hasAnySection = /^#{1,2}\s+\S+/im.test(content);
+  if (!hasAnySection) {
+    findings.push(finding("low", "format.minimal_structure", "No section headers found", "Consider adding section headers to structure your skill content."));
   }
 
   const securityRules = [
@@ -531,6 +667,313 @@ function severityCost(severity) {
 
 function lineOf(content, index) {
   return content.slice(0, index).split(/\r?\n/).length;
+}
+
+// ============ GitHub Import Functions ============
+
+/**
+ * Convert ArrayBuffer to Base64 string
+ */
+function arrayBufferToBase64(buffer) {
+  const binary = [];
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary.push(String.fromCharCode(bytes[i]));
+  }
+  return btoa(binary.join(""));
+}
+
+/**
+ * Parse GitHub URL or shorthand to extract repo and path
+ * Supports formats:
+ * - https://github.com/owner/repo/tree/branch/path
+ * - https://github.com/owner/repo/blob/branch/path
+ * - https://github.com/owner/repo
+ * - owner/repo
+ * - owner/repo/path/to/skill
+ */
+function parseGitHubInput(input) {
+  input = input.trim();
+  
+  // Remove protocol and trailing slash
+  input = input.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  
+  // Full GitHub URL with tree
+  const treeMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/(.+)/);
+  if (treeMatch) {
+    return {
+      repo: `${treeMatch[1]}/${treeMatch[2]}`,
+      branch: treeMatch[3],
+      path: treeMatch[4]
+    };
+  }
+  
+  // Full GitHub URL with blob
+  const blobMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)/);
+  if (blobMatch) {
+    return {
+      repo: `${blobMatch[1]}/${blobMatch[2]}`,
+      branch: blobMatch[3],
+      path: blobMatch[4]
+    };
+  }
+  
+  // Just the repo URL: github.com/owner/repo
+  const repoOnlyMatch = input.match(/github\.com\/([^/]+)\/([^/]+)$/);
+  if (repoOnlyMatch) {
+    return {
+      repo: `${repoOnlyMatch[1]}/${repoOnlyMatch[2]}`,
+      branch: "main",
+      path: ""
+    };
+  }
+  
+  // Shorthand: owner/repo or owner/repo/path
+  const shorthandMatch = input.match(/^([^/]+)\/([^/]+)(?:\/(.+))?$/);
+  if (shorthandMatch) {
+    return {
+      repo: `${shorthandMatch[1]}/${shorthandMatch[2]}`,
+      branch: "main",
+      path: shorthandMatch[3] || ""
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Fetch directory contents using GitHub Raw URLs (bypasses API rate limits)
+ */
+async function fetchGitHubRaw(repo, path, branch = "main") {
+  const result = {};
+  path = path.replace(/^\/+|\/+$/g, '');
+  
+  // Try to get SKILL.md first
+  const skillMdPath = path ? `${path}/SKILL.md` : 'SKILL.md';
+  const encodedPath = skillMdPath.split('/').map(encodeURIComponent).join('/');
+  const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${encodedPath}`;
+  
+  try {
+    const response = await fetch(rawUrl);
+    if (response.ok) {
+      const content = await response.text();
+      const isBinary = content.length > 0 && (content.charCodeAt(0) === 0 || 
+        (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100))));
+      
+      result[skillMdPath] = {
+        name: "SKILL.md",
+        path: skillMdPath,
+        size: content.length,
+        sha: "",
+        content: isBinary ? btoa(content) : content,
+        isBinary: isBinary,
+        download_url: rawUrl,
+        fetched: true
+      };
+      
+      return result;
+    }
+  } catch (error) {
+    console.warn(`Failed to fetch SKILL.md via raw URL: ${error.message}`);
+  }
+  
+  throw new Error("Failed to fetch SKILL.md via raw URL");
+}
+
+/**
+ * Fetch directory contents from GitHub API recursively
+ */
+async function fetchGitHubDirectory(repo, path, branch = "main") {
+  const result = {};
+  
+  // GitHub API requires a User-Agent header
+  const headers = {
+    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "5kill5/1.0.0"
+  };
+  
+  async function fetchDir(dirPath) {
+    // Cleanup path - remove leading/trailing slashes
+    dirPath = dirPath.replace(/^\/+|\/+$/g, '');
+    const query = branch ? `?ref=${encodeURIComponent(branch)}` : '';
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(dirPath)}${query}`;
+    
+    try {
+      const response = await fetch(apiUrl, { headers });
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        
+        // If rate limited, try fallback to raw URL for SKILL.md
+        if (response.status === 403) {
+          console.warn("GitHub API rate limited, falling back to raw URL");
+          const fallbackResult = await fetchGitHubRaw(repo, path, branch);
+          Object.assign(result, fallbackResult);
+          return;
+        }
+        
+        let errorMsg = `HTTP ${response.status}`;
+        if (response.status === 404) {
+          errorMsg += " - Repository or path not found. Check the repo, path, and branch.";
+        }
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.message) errorMsg += ` (${errorJson.message})`;
+          } catch (e) {}
+        }
+        throw new Error(errorMsg);
+      }
+      
+      const items = await response.json();
+      
+      if (!Array.isArray(items)) {
+        throw new Error("API returned unexpected format - ensure the path is a directory");
+      }
+      
+      for (const item of items) {
+        if (item.type === "file") {
+          try {
+            // Try to fetch file content, but skip if it fails (e.g., large files)
+            let content = "";
+            let isBinary = false;
+            let fetchedOk = false;
+            
+            try {
+              const fileResponse = await fetch(item.download_url, { 
+                headers: { "User-Agent": "5kill5/1.0.0" }
+              });
+              if (fileResponse.ok) {
+                const contentType = fileResponse.headers.get("content-type") || "";
+                // Check if binary based on content type or file extension
+                const isBinaryType = contentType.startsWith("image/") || 
+                  contentType.startsWith("audio/") || 
+                  contentType.startsWith("video/") ||
+                  /\.(jpg|jpeg|png|gif|mp3|mp4|pdf|zip|bin)$/i.test(item.name);
+                
+                if (isBinaryType) {
+                  const buffer = await fileResponse.arrayBuffer();
+                  content = arrayBufferToBase64(buffer);
+                  isBinary = true;
+                } else {
+                  content = await fileResponse.text();
+                  isBinary = content.length > 0 && (content.charCodeAt(0) === 0 || 
+                    (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100))));
+                }
+                fetchedOk = true;
+              }
+            } catch (fetchError) {
+              // If we can't fetch the file content, skip it but log
+              console.warn(`Skipping ${item.path}: ${fetchError.message}`);
+            }
+            
+            result[item.path] = {
+              name: item.name,
+              path: item.path,
+              size: item.size,
+              sha: item.sha,
+              content: content,
+              isBinary: isBinary,
+              download_url: item.download_url,
+              fetched: fetchedOk
+            };
+          } catch (fileError) {
+            console.warn(`Skipping ${item.path}: ${fileError.message}`);
+          }
+        } else if (item.type === "dir") {
+          // Recursively fetch subdirectory
+          await fetchDir(item.path);
+        }
+      }
+    } catch (error) {
+      throw new Error(`Failed to fetch ${dirPath}: ${error.message}`);
+    }
+  }
+  
+  await fetchDir(path);
+  return result;
+}
+
+/**
+ * Create a skill object from GitHub repository data
+ */
+function createSkillFromGitHub(repo, branch, files) {
+  // Find SKILL.md
+  let skillMdPath = null;
+  for (const [path, file] of Object.entries(files)) {
+    if (path.toLowerCase().endsWith("skill.md")) {
+      skillMdPath = path;
+      break;
+    }
+  }
+  
+  if (!skillMdPath) {
+    throw new Error(t("error.noSkillMd"));
+  }
+  
+  const skillMd = files[skillMdPath];
+  let content = skillMd.content || "";
+  
+  // Handle binary encoded content
+  if (skillMd.isBinary) {
+    try {
+      content = atob(content);
+    } catch (e) {
+      // If we can't decode, use what we have or skip
+    }
+  }
+  
+  const parsed = parseSkill(content, skillMdPath);
+  
+  // Extract skill name from path
+  const pathParts = skillMdPath.split("/");
+  const skillDirName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : parsed.meta.name || "unknown";
+  
+  // Build files object (excluding SKILL.md from content but keeping reference)
+  const skillFiles = {};
+  for (const [path, file] of Object.entries(files)) {
+    if (path !== skillMdPath) {
+      skillFiles[path] = {
+        name: file.name,
+        size: file.size,
+        sha: file.sha,
+        content: file.content,
+        isBinary: file.isBinary,
+        fetched: file.fetched
+      };
+    }
+  }
+  
+  const skill = {
+    id: uid("skill"),
+    name: parsed.meta.name || skillDirName,
+    slug: slugify(parsed.meta.name || skillDirName),
+    version: parsed.meta.version || "0.0.0",
+    description: parsed.meta.description || "",
+    officialTags: extractTags(parsed.meta),
+    userTags: [],
+    triggers: parsed.meta.triggers || [],
+    compatibility: parsed.meta.compatibility || { agents: ["generic"] },
+    riskLevel: parsed.meta.risk_level || "medium",
+    author: parsed.meta.author || "",
+    license: parsed.meta.license || "",
+    content: content,
+    sha256: hashString(content),
+    lifecycle: "draft",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    // GitHub-specific fields
+    source: {
+      type: "github",
+      repo: repo,
+      path: skillMdPath,
+      branch: branch,
+      url: `https://github.com/${repo}/tree/${branch}/${skillMdPath.split("/").slice(0, -1).join("/")}`
+    },
+    files: skillFiles
+  };
+  
+  skill.quality = runQualityGate(skill);
+  return skill;
 }
 
 function escapeHtml(value) {
@@ -632,7 +1075,8 @@ function renderSkills() {
   const agent = document.getElementById("agent-filter").value;
   const risk = document.getElementById("risk-filter").value;
   const filtered = state.skills.filter((skill) => {
-    const haystack = [skill.name, skill.description, skill.tags.join(" "), skill.triggers.join(" ")].join(" ").toLowerCase();
+    const allTags = [...(skill.officialTags || []), ...(skill.userTags || [])];
+    const haystack = [skill.name, skill.description, allTags.join(" "), (skill.triggers || []).join(" ")].join(" ").toLowerCase();
     const agentOk = !agent || skill.compatibility?.agents?.includes(agent);
     const riskOk = !risk || skill.riskLevel === risk;
     return haystack.includes(query) && agentOk && riskOk;
@@ -648,9 +1092,12 @@ function renderSkills() {
       return `<tr data-skill-id="${skill.id}" class="${skill.id === selectedSkillId ? "selected" : ""}">
         <td title="${escapeHtml(skill.description)}">${escapeHtml(skill.name)}</td>
         <td>${escapeHtml(skill.version)}</td>
-        <td><span class="tag-row">${skill.tags.slice(0, 3).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</span></td>
+        <td><span class="tag-row">${[...(skill.officialTags || []), ...(skill.userTags || [])].slice(0, 3).map((tag, i) => 
+          `<span class="tag ${i < (skill.officialTags || []).length ? "official" : "user"}">${escapeHtml(tag)}</span>`
+        ).join("")}</span></td>
         <td>${quality}</td>
         <td>${release}</td>
+        <td><button class="delete-skill-btn" data-skill-id="${skill.id}" title="Delete">✕</button></td>
       </tr>`;
     })
     .join("");
@@ -663,14 +1110,84 @@ function renderSkills() {
     });
   });
 
+  // Add delete button event listeners
+  document.querySelectorAll(".delete-skill-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const skillId = btn.dataset.skillId;
+      const skill = state.skills.find((s) => s.id === skillId);
+      
+      if (confirm(`Are you sure you want to delete "${skill?.name || skillId}"?`)) {
+        state.skills = state.skills.filter((s) => s.id !== skillId);
+        if (selectedSkillId === skillId) {
+          selectedSkillId = state.skills[0]?.id || null;
+        }
+        saveState();
+        render();
+      }
+    });
+  });
+
   const skill = state.skills.find((item) => item.id === selectedSkillId) || state.skills[0];
   if (!skill) return;
   selectedSkillId = skill.id;
   document.getElementById("skill-detail-title").textContent = skill.name || t("panel.skillPreview");
   document.getElementById("skill-detail-meta").textContent = `${skill.version} · ${skill.compatibility?.agents?.join(", ") || "generic"} · ${skill.sha256}`;
+  
+  // Render official tags (read-only)
+  const officialTags = skill.officialTags || [];
+  const userTags = skill.userTags || [];
+  document.getElementById("skill-official-tags").innerHTML = officialTags.length > 0
+    ? officialTags.map(tag => `<span class="tag official">${escapeHtml(tag)}</span>`).join("")
+    : "<span class='muted'>None</span>";
+  
+  // Render user tags (editable)
+  document.getElementById("skill-user-tags").innerHTML = userTags.length > 0
+    ? userTags.map((tag, index) => 
+        `<span class="tag user" data-tag-index="${index}">${escapeHtml(tag)} <button class="remove-tag-btn" data-tag-index="${index}">×</button></span>`
+      ).join("")
+    : "<span class='muted'>None</span>";
+  
   document.getElementById("skill-preview").textContent = skill.content;
   document.getElementById("skill-findings").innerHTML = renderFindings(skill.quality.findings);
   document.getElementById("publish-skill").disabled = skill.quality.status === "blocked";
+  
+  // Add user tag interaction
+  document.getElementById("add-user-tag-btn").onclick = () => addUserTag(skill);
+  document.getElementById("add-user-tag-input").onkeydown = (e) => {
+    if (e.key === "Enter") addUserTag(skill);
+  };
+  
+  // Add remove tag interaction
+  document.querySelectorAll(".remove-tag-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      const index = parseInt(e.target.dataset.tagIndex);
+      removeUserTag(skill, index);
+    };
+  });
+}
+
+function addUserTag(skill) {
+  const input = document.getElementById("add-user-tag-input");
+  const tag = input.value.trim();
+  if (!tag) return;
+  
+  if (!skill.userTags) skill.userTags = [];
+  if (!skill.userTags.includes(tag)) {
+    skill.userTags.push(tag);
+    skill.updatedAt = nowIso();
+    saveState();
+    render();
+  }
+  input.value = "";
+}
+
+function removeUserTag(skill, index) {
+  if (!skill.userTags) skill.userTags = [];
+  skill.userTags.splice(index, 1);
+  skill.updatedAt = nowIso();
+  saveState();
+  render();
 }
 
 function qualityBadge(status) {
@@ -926,6 +1443,190 @@ document.getElementById("skill-file").addEventListener("change", async (event) =
   event.target.value = "";
   render();
 });
+
+// Import dropdown menu toggle
+const importMenuBtn = document.getElementById("import-menu-btn");
+const importDropdownMenu = document.getElementById("import-dropdown-menu");
+const importGithubBtn = document.getElementById("import-github-btn");
+
+importMenuBtn.addEventListener("click", () => {
+  importDropdownMenu.classList.toggle("show");
+});
+
+document.addEventListener("click", (event) => {
+  if (!importMenuBtn.contains(event.target) && !importDropdownMenu.contains(event.target)) {
+    importDropdownMenu.classList.remove("show");
+  }
+});
+
+// GitHub import dialog
+const githubDialog = document.getElementById("github-import-dialog");
+const githubRepoInput = document.getElementById("github-repo");
+const githubPathInput = document.getElementById("github-path");
+const githubBranchInput = document.getElementById("github-branch");
+const githubPreviewBtn = document.getElementById("github-preview-btn");
+const githubImportBtn = document.getElementById("github-import-btn");
+const githubPreview = document.getElementById("github-import-preview");
+
+let githubFetchedFiles = null;
+
+importGithubBtn.addEventListener("click", () => {
+  importDropdownMenu.classList.remove("show");
+  githubRepoInput.value = "";
+  githubPathInput.value = "";
+  githubBranchInput.value = "";
+  githubPreviewBtn.disabled = false;
+  githubImportBtn.disabled = true;
+  githubPreview.hidden = true;
+  githubFetchedFiles = null;
+  githubDialog.showModal();
+});
+
+githubPreviewBtn.addEventListener("click", async () => {
+  let repo = githubRepoInput.value.trim();
+  let path = githubPathInput.value.trim();
+  let branch = githubBranchInput.value.trim() || "main";
+  
+  // Parse repo input if it's a full URL
+  const repoParsed = parseGitHubInput(repo);
+  if (repoParsed) {
+    repo = repoParsed.repo;
+    if (!branch || branch === "main") {
+      branch = repoParsed.branch;
+    }
+  }
+  
+  // Parse path input if it's a full URL
+  const pathParsed = parseGitHubInput(path);
+  if (pathParsed) {
+    // If path input contains repo info, use it to override
+    if (!repoParsed) {
+      repo = pathParsed.repo;
+    }
+    path = pathParsed.path;
+    if (!branch || branch === "main") {
+      branch = pathParsed.branch;
+    }
+  }
+  
+  if (!repo || !path) {
+    alert(t("error.invalidUrl"));
+    return;
+  }
+  
+  githubPreview.hidden = false;
+  githubPreview.innerHTML = `<p class="loading">${t("loading.fetching")}</p>`;
+  githubPreviewBtn.disabled = true;
+  
+  try {
+    githubFetchedFiles = await fetchGitHubDirectory(repo, path, branch);
+    
+    const fileCount = Object.keys(githubFetchedFiles).length;
+    let html = `<h4>${fileCount} ${t("preview.fileCount").replace("{count}", fileCount)}</h4>`;
+    
+    // Show fallback notice if only SKILL.md was fetched (rate limit fallback)
+    if (fileCount === 1 && Object.keys(githubFetchedFiles)[0]?.toLowerCase().endsWith("skill.md")) {
+      html += `<p style="color: orange; font-size: 12px; margin-top: 8px;">Note: GitHub API rate limit reached. Only SKILL.md was fetched via raw URL. Other files (scripts, assets, etc.) are not available.</p>`;
+    }
+    
+    // Parse SKILL.md and show metadata preview (name, description, tags, etc.)
+    for (const [filePath, file] of Object.entries(githubFetchedFiles)) {
+      if (filePath.toLowerCase().endsWith("skill.md") && file.content && !file.isBinary) {
+        try {
+          const parsed = parseSkill(file.content, filePath);
+          const tags = extractTags(parsed.meta);
+          html += `<div class="skill-meta-preview" style="margin: 10px 0; padding: 10px; background: var(--surface, #f5f5f5); border-radius: 6px; font-size: 13px;">`;
+          html += `<div style="margin-bottom: 4px;"><strong>${escapeHtml(parsed.meta.name || "Unknown")}</strong> <span style="color: var(--muted, #888);">${escapeHtml(parsed.meta.version || "")}</span></div>`;
+          if (parsed.meta.description) {
+            html += `<div style="color: var(--muted, #666); margin-bottom: 6px;">${escapeHtml(parsed.meta.description)}</div>`;
+          }
+          if (parsed.meta.author) {
+            html += `<div style="color: var(--muted, #888); margin-bottom: 4px;">by ${escapeHtml(parsed.meta.author)}</div>`;
+          }
+          if (tags.length > 0) {
+            html += `<div class="tag-row" style="margin-top: 4px;">${tags.map(tag => `<span class="tag official">${escapeHtml(tag)}</span>`).join(" ")}</div>`;
+          }
+          html += `</div>`;
+        } catch (e) {
+          // Ignore parse errors in preview
+        }
+        break;
+      }
+    }
+    
+    // Group files by type
+    const skillFiles = [];
+    const otherFiles = [];
+    let hasSkilledMd = false;
+    
+    for (const [filePath, file] of Object.entries(githubFetchedFiles)) {
+      if (filePath.toLowerCase().endsWith("skill.md")) {
+        skillFiles.push({ path: filePath, ...file });
+        if (file.fetched !== false) {
+          hasSkilledMd = true;
+        }
+      } else {
+        otherFiles.push({ path: filePath, ...file });
+      }
+    }
+    
+    if (skillFiles.length > 0) {
+      html += `<h4>${t("preview.skills")}</h4><ul>`;
+      for (const f of skillFiles) {
+        const statusBadge = f.fetched === false ? ' <span style="color: orange;">(content not fetched)</span>' : '';
+        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})${statusBadge}</span></li>`;
+      }
+      html += `</ul>`;
+    }
+    
+    if (otherFiles.length > 0) {
+      html += `<h4>${t("preview.others")}</h4><ul>`;
+      for (const f of otherFiles.slice(0, 20)) { // Limit to first 20
+        const statusBadge = f.fetched === false ? ' <span style="color: orange;">(content not fetched)</span>' : '';
+        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})${statusBadge}</span></li>`;
+      }
+      if (otherFiles.length > 20) {
+        html += `<li>... and ${otherFiles.length - 20} more files</li>`;
+      }
+      html += `</ul>`;
+    }
+    
+    githubPreview.innerHTML = html;
+    githubImportBtn.disabled = !hasSkilledMd;
+    githubPreviewBtn.disabled = false;
+  } catch (error) {
+    githubPreview.innerHTML = `<p class="error">${t("error.fetchFailed")}: ${error.message}</p>`;
+    githubImportBtn.disabled = true;
+    githubPreviewBtn.disabled = false;
+  }
+});
+
+githubImportBtn.addEventListener("click", () => {
+  if (!githubFetchedFiles) return;
+  
+  const repo = githubRepoInput.value.trim();
+  const branch = githubBranchInput.value.trim() || "main";
+  
+  try {
+    const skill = createSkillFromGitHub(repo, branch, githubFetchedFiles);
+    state.skills.unshift(skill);
+    selectedSkillId = skill.id;
+    saveState();
+    githubDialog.close();
+    render();
+    
+    // Show success message
+    showToast(t("success.imported").replace("{name}", skill.name));
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
 
 document.getElementById("create-pack").addEventListener("click", () => {
   openEntityDialog(t("dialog.newPack"), [
