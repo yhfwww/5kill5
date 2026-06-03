@@ -976,6 +976,75 @@ function createSkillFromGitHub(repo, branch, files) {
   return skill;
 }
 
+/**
+ * Create a skill object from a .zip/.skill file
+ */
+function createSkillFromZipFile(fileName, files) {
+  // Find SKILL.md
+  let skillMdPath = null;
+  for (const [path, file] of Object.entries(files)) {
+    if (path.toLowerCase().endsWith("skill.md")) {
+      skillMdPath = path;
+      break;
+    }
+  }
+  
+  if (!skillMdPath) {
+    throw new Error(t("error.noSkillMd"));
+  }
+  
+  const skillMd = files[skillMdPath];
+  const content = skillMd.content || "";
+  const parsed = parseSkill(content, skillMdPath);
+  
+  // Extract skill name from path or filename
+  const pathParts = skillMdPath.split("/");
+  // e.g. "changelog-keeper/SKILL.md" → "changelog-keeper"
+  const skillDirName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : parsed.meta.name || "unknown";
+  
+  // Build files object (excluding SKILL.md)
+  const skillFiles = {};
+  for (const [path, file] of Object.entries(files)) {
+    if (path !== skillMdPath) {
+      skillFiles[path] = {
+        name: file.name,
+        size: file.size,
+        sha: file.sha,
+        content: file.content,
+        isBinary: file.isBinary,
+        fetched: file.fetched
+      };
+    }
+  }
+  
+  const skill = {
+    id: uid("skill"),
+    name: parsed.meta.name || skillDirName,
+    slug: slugify(parsed.meta.name || skillDirName),
+    version: parsed.meta.version || "0.0.0",
+    description: parsed.meta.description || "",
+    officialTags: extractTags(parsed.meta),
+    userTags: [],
+    triggers: parsed.meta.triggers || [],
+    compatibility: parsed.meta.compatibility || { agents: ["generic"] },
+    riskLevel: parsed.meta.risk_level || "medium",
+    author: parsed.meta.author || "",
+    license: parsed.meta.license || "",
+    content: content,
+    sha256: hashString(content),
+    lifecycle: "draft",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    // ZIP-specific fields
+    source: {
+      type: "zip",
+      fileName: fileName
+    },
+    files: skillFiles
+  };
+  
+  skill.quality = runQualityGate(skill);
+  return skill;
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -1430,18 +1499,82 @@ document.getElementById("publish-profile").addEventListener("click", publishProf
 document.getElementById("skill-file").addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
-  if (/\.zip$/i.test(file.name)) {
-    alert(t("alert.zipBrowserPreview"));
+  
+  const isZip = /\.(zip|skill)$/i.test(file.name);
+  
+  if (isZip) {
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const files = {};
+      
+      // Extract all files from the ZIP
+      for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue;
+        // Skip __MACOSX and hidden files
+        if (relativePath.startsWith("__MACOSX") || relativePath.includes("/.")) continue;
+        
+        const isBinary = /\.(jpg|jpeg|png|gif|mp3|mp4|pdf|zip|bin|skill|ico|svg|woff|woff2|ttf|eot)$/i.test(relativePath);
+        
+        if (isBinary) {
+          const buffer = await zipEntry.async("arraybuffer");
+          files[relativePath] = {
+            name: relativePath.split("/").pop(),
+            path: relativePath,
+            size: buffer.byteLength,
+            sha: "",
+            content: arrayBufferToBase64(buffer),
+            isBinary: true,
+            fetched: true
+          };
+        } else {
+          const text = await zipEntry.async("string");
+          files[relativePath] = {
+            name: relativePath.split("/").pop(),
+            path: relativePath,
+            size: text.length,
+            sha: "",
+            content: text,
+            isBinary: false,
+            fetched: true
+          };
+        }
+      }
+      
+      // Find SKILL.md
+      let skillMdPath = null;
+      for (const [path, f] of Object.entries(files)) {
+        if (path.toLowerCase().endsWith("skill.md")) {
+          skillMdPath = path;
+          break;
+        }
+      }
+      
+      if (!skillMdPath) {
+        alert(t("error.noSkillMd"));
+        event.target.value = "";
+        return;
+      }
+      
+      // Create skill from the extracted files
+      const skill = createSkillFromZipFile(file.name, files);
+      state.skills.unshift(skill);
+      selectedSkillId = skill.id;
+      saveState();
+      event.target.value = "";
+      render();
+      showToast(t("success.imported").replace("{name}", skill.name));
+    } catch (error) {
+      alert(`Failed to parse ${file.name}: ${error.message}`);
+    }
+  } else {
+    const content = await file.text();
+    const skill = createSkillFromContent(content, file.name);
+    state.skills.unshift(skill);
+    selectedSkillId = skill.id;
+    saveState();
     event.target.value = "";
-    return;
+    render();
   }
-  const content = await file.text();
-  const skill = createSkillFromContent(content, file.name);
-  state.skills.unshift(skill);
-  selectedSkillId = skill.id;
-  saveState();
-  event.target.value = "";
-  render();
 });
 
 // Import dropdown menu toggle

@@ -39,9 +39,9 @@
                 <span aria-hidden="true">+</span>
               </button>
               <div class="dropdown-menu" id="import-dropdown-menu">
-                <label class="dropdown-item" title="Import from local file">
-                  <span>Local File</span>
-                  <input id="skill-file" type="file" accept=".md,.markdown,text/markdown" hidden />
+                <label class="dropdown-item" title="Import from local file (.md, .zip, .skill)">
+                  <span>Local File (.md, .zip, .skill)</span>
+                  <input id="skill-file" type="file" accept=".md,.markdown,.zip,.skill,text/markdown" hidden />
                 </label>
                 <button class="dropdown-item" id="import-github-btn" type="button">
                   GitHub Repository
@@ -234,6 +234,7 @@
       </form>
     </dialog>
 
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>
