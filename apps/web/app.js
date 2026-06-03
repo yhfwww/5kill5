@@ -461,7 +461,8 @@ function createSkillFromContent(content, fileName = "SKILL.md") {
     slug: slugify(parsed.meta.name || fileName),
     version: parsed.meta.version || "0.0.0",
     description: parsed.meta.description || "",
-    tags: parsed.meta.tags || [],
+    officialTags: parsed.meta.tags || [],
+    userTags: [],
     triggers: parsed.meta.triggers || [],
     compatibility: parsed.meta.compatibility || { agents: ["generic"] },
     riskLevel: parsed.meta.risk_level || "medium",
@@ -1017,7 +1018,8 @@ function renderSkills() {
   const agent = document.getElementById("agent-filter").value;
   const risk = document.getElementById("risk-filter").value;
   const filtered = state.skills.filter((skill) => {
-    const haystack = [skill.name, skill.description, skill.tags.join(" "), skill.triggers.join(" ")].join(" ").toLowerCase();
+    const allTags = [...skill.officialTags, ...skill.userTags];
+    const haystack = [skill.name, skill.description, allTags.join(" "), skill.triggers.join(" ")].join(" ").toLowerCase();
     const agentOk = !agent || skill.compatibility?.agents?.includes(agent);
     const riskOk = !risk || skill.riskLevel === risk;
     return haystack.includes(query) && agentOk && riskOk;
@@ -1033,7 +1035,9 @@ function renderSkills() {
       return `<tr data-skill-id="${skill.id}" class="${skill.id === selectedSkillId ? "selected" : ""}">
         <td title="${escapeHtml(skill.description)}">${escapeHtml(skill.name)}</td>
         <td>${escapeHtml(skill.version)}</td>
-        <td><span class="tag-row">${skill.tags.slice(0, 3).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}</span></td>
+        <td><span class="tag-row">${[...skill.officialTags, ...skill.userTags].slice(0, 3).map((tag, i) => 
+          `<span class="tag ${i < skill.officialTags.length ? "official" : "user"}">${escapeHtml(tag)}</span>`
+        ).join("")}</span></td>
         <td>${quality}</td>
         <td>${release}</td>
         <td><button class="delete-skill-btn" data-skill-id="${skill.id}" title="Delete">✕</button></td>
@@ -1072,9 +1076,57 @@ function renderSkills() {
   selectedSkillId = skill.id;
   document.getElementById("skill-detail-title").textContent = skill.name || t("panel.skillPreview");
   document.getElementById("skill-detail-meta").textContent = `${skill.version} · ${skill.compatibility?.agents?.join(", ") || "generic"} · ${skill.sha256}`;
+  
+  // Render official tags (read-only)
+  document.getElementById("skill-official-tags").innerHTML = skill.officialTags.length > 0
+    ? skill.officialTags.map(tag => `<span class="tag official">${escapeHtml(tag)}</span>`).join("")
+    : "<span class='muted'>None</span>";
+  
+  // Render user tags (editable)
+  document.getElementById("skill-user-tags").innerHTML = skill.userTags.length > 0
+    ? skill.userTags.map((tag, index) => 
+        `<span class="tag user" data-tag-index="${index}">${escapeHtml(tag)} <button class="remove-tag-btn" data-tag-index="${index}">×</button></span>`
+      ).join("")
+    : "<span class='muted'>None</span>";
+  
   document.getElementById("skill-preview").textContent = skill.content;
   document.getElementById("skill-findings").innerHTML = renderFindings(skill.quality.findings);
   document.getElementById("publish-skill").disabled = skill.quality.status === "blocked";
+  
+  // Add user tag interaction
+  document.getElementById("add-user-tag-btn").onclick = () => addUserTag(skill);
+  document.getElementById("add-user-tag-input").onkeydown = (e) => {
+    if (e.key === "Enter") addUserTag(skill);
+  };
+  
+  // Add remove tag interaction
+  document.querySelectorAll(".remove-tag-btn").forEach(btn => {
+    btn.onclick = (e) => {
+      const index = parseInt(e.target.dataset.tagIndex);
+      removeUserTag(skill, index);
+    };
+  });
+}
+
+function addUserTag(skill) {
+  const input = document.getElementById("add-user-tag-input");
+  const tag = input.value.trim();
+  if (!tag) return;
+  
+  if (!skill.userTags.includes(tag)) {
+    skill.userTags.push(tag);
+    skill.updatedAt = nowIso();
+    saveState();
+    render();
+  }
+  input.value = "";
+}
+
+function removeUserTag(skill, index) {
+  skill.userTags.splice(index, 1);
+  skill.updatedAt = nowIso();
+  saveState();
+  render();
 }
 
 function qualityBadge(status) {
