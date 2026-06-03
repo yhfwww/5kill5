@@ -384,7 +384,18 @@ function loadState() {
   const raw = localStorage.getItem(storageKey);
   if (raw) {
     try {
-      return JSON.parse(raw);
+      const data = JSON.parse(raw);
+      // Migrate old tags → officialTags/userTags
+      if (data.skills) {
+        data.skills.forEach((skill) => {
+          if (skill.officialTags === undefined) {
+            skill.officialTags = skill.tags || [];
+            skill.userTags = skill.userTags || [];
+            delete skill.tags;
+          }
+        });
+      }
+      return data;
     } catch {
       localStorage.removeItem(storageKey);
     }
@@ -893,7 +904,8 @@ function createSkillFromGitHub(repo, branch, files) {
     slug: slugify(parsed.meta.name || skillDirName),
     version: parsed.meta.version || "0.0.0",
     description: parsed.meta.description || "",
-    tags: parsed.meta.tags || [],
+    officialTags: parsed.meta.tags || [],
+    userTags: [],
     triggers: parsed.meta.triggers || [],
     compatibility: parsed.meta.compatibility || { agents: ["generic"] },
     riskLevel: parsed.meta.risk_level || "medium",
@@ -1018,8 +1030,8 @@ function renderSkills() {
   const agent = document.getElementById("agent-filter").value;
   const risk = document.getElementById("risk-filter").value;
   const filtered = state.skills.filter((skill) => {
-    const allTags = [...skill.officialTags, ...skill.userTags];
-    const haystack = [skill.name, skill.description, allTags.join(" "), skill.triggers.join(" ")].join(" ").toLowerCase();
+    const allTags = [...(skill.officialTags || []), ...(skill.userTags || [])];
+    const haystack = [skill.name, skill.description, allTags.join(" "), (skill.triggers || []).join(" ")].join(" ").toLowerCase();
     const agentOk = !agent || skill.compatibility?.agents?.includes(agent);
     const riskOk = !risk || skill.riskLevel === risk;
     return haystack.includes(query) && agentOk && riskOk;
@@ -1035,8 +1047,8 @@ function renderSkills() {
       return `<tr data-skill-id="${skill.id}" class="${skill.id === selectedSkillId ? "selected" : ""}">
         <td title="${escapeHtml(skill.description)}">${escapeHtml(skill.name)}</td>
         <td>${escapeHtml(skill.version)}</td>
-        <td><span class="tag-row">${[...skill.officialTags, ...skill.userTags].slice(0, 3).map((tag, i) => 
-          `<span class="tag ${i < skill.officialTags.length ? "official" : "user"}">${escapeHtml(tag)}</span>`
+        <td><span class="tag-row">${[...(skill.officialTags || []), ...(skill.userTags || [])].slice(0, 3).map((tag, i) => 
+          `<span class="tag ${i < (skill.officialTags || []).length ? "official" : "user"}">${escapeHtml(tag)}</span>`
         ).join("")}</span></td>
         <td>${quality}</td>
         <td>${release}</td>
@@ -1078,13 +1090,15 @@ function renderSkills() {
   document.getElementById("skill-detail-meta").textContent = `${skill.version} · ${skill.compatibility?.agents?.join(", ") || "generic"} · ${skill.sha256}`;
   
   // Render official tags (read-only)
-  document.getElementById("skill-official-tags").innerHTML = skill.officialTags.length > 0
-    ? skill.officialTags.map(tag => `<span class="tag official">${escapeHtml(tag)}</span>`).join("")
+  const officialTags = skill.officialTags || [];
+  const userTags = skill.userTags || [];
+  document.getElementById("skill-official-tags").innerHTML = officialTags.length > 0
+    ? officialTags.map(tag => `<span class="tag official">${escapeHtml(tag)}</span>`).join("")
     : "<span class='muted'>None</span>";
   
   // Render user tags (editable)
-  document.getElementById("skill-user-tags").innerHTML = skill.userTags.length > 0
-    ? skill.userTags.map((tag, index) => 
+  document.getElementById("skill-user-tags").innerHTML = userTags.length > 0
+    ? userTags.map((tag, index) => 
         `<span class="tag user" data-tag-index="${index}">${escapeHtml(tag)} <button class="remove-tag-btn" data-tag-index="${index}">×</button></span>`
       ).join("")
     : "<span class='muted'>None</span>";
@@ -1113,6 +1127,7 @@ function addUserTag(skill) {
   const tag = input.value.trim();
   if (!tag) return;
   
+  if (!skill.userTags) skill.userTags = [];
   if (!skill.userTags.includes(tag)) {
     skill.userTags.push(tag);
     skill.updatedAt = nowIso();
@@ -1123,6 +1138,7 @@ function addUserTag(skill) {
 }
 
 function removeUserTag(skill, index) {
+  if (!skill.userTags) skill.userTags = [];
   skill.userTags.splice(index, 1);
   skill.updatedAt = nowIso();
   saveState();
