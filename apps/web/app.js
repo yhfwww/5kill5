@@ -168,7 +168,25 @@ const translations = {
     "alert.packBlocked": "Pack contains blocked skills.",
     "alert.profileUnpublishedPacks": "Profile contains unpublished packs.",
     "alert.zipBrowserPreview": "ZIP files are accepted by the Cloudflare import API; this browser preview imports SKILL.md files.",
-    "privacy.storage": "5KILL5 stores full Skill content for synchronization. Do not upload secrets, private keys, tokens, customer data, or other sensitive material.",
+    "button.importGithub": "Import from GitHub",
+    "dialog.importGithub": "Import from GitHub",
+    "field.githubRepo": "Repository (owner/repo)",
+    "field.githubPath": "Path to skill directory",
+    "field.githubBranch": "Branch (optional)",
+    "button.import": "Import",
+    "button.cancel": "Cancel",
+    "button.preview": "Preview",
+    "loading.fetching": "Fetching...",
+    "error.invalidUrl": "Invalid GitHub URL or repository path",
+    "error.fetchFailed": "Failed to fetch repository contents",
+    "error.noSkillMd": "SKILL.md not found in this directory",
+    "preview.title": "Import Preview",
+    "preview.fileCount": "{count} files will be imported",
+    "preview.skills": "Skill Files",
+    "preview.others": "Other Files",
+    "confirm.import": "Confirm Import",
+    "status.importing": "Importing...",
+    "success.imported": "Successfully imported {name}",
     "privacy.usage": "Skill content is used for account storage, release manifest generation, device synchronization, and quality checks. It is not used for model training.",
     "privacy.boundary": "The platform manages and distributes Skill files. It does not write, rewrite, repair, or generate Skill content with third-party model APIs.",
     "finding.format.required_frontmatter.message": "Required manifest field is missing.",
@@ -275,6 +293,25 @@ const translations = {
     "alert.packBlocked": "组合包包含被阻止发布的技能。",
     "alert.profileUnpublishedPacks": "配置包含未发布的组合包。",
     "alert.zipBrowserPreview": "ZIP 文件由 Cloudflare 导入 API 接收；当前浏览器预览只导入 SKILL.md 文件。",
+    "button.importGithub": "从 GitHub 导入",
+    "dialog.importGithub": "从 GitHub 导入",
+    "field.githubRepo": "仓库 (owner/repo)",
+    "field.githubPath": "Skill 目录路径",
+    "field.githubBranch": "分支（可选）",
+    "button.import": "导入",
+    "button.cancel": "取消",
+    "button.preview": "预览",
+    "loading.fetching": "获取中...",
+    "error.invalidUrl": "无效的 GitHub URL 或仓库路径",
+    "error.fetchFailed": "获取仓库内容失败",
+    "error.noSkillMd": "未在该目录中找到 SKILL.md",
+    "preview.title": "导入预览",
+    "preview.fileCount": "将导入 {count} 个文件",
+    "preview.skills": "Skill 文件",
+    "preview.others": "其他文件",
+    "confirm.import": "确认导入",
+    "status.importing": "导入中...",
+    "success.imported": "成功导入 {name}",
     "privacy.storage": "5KILL5 会保存完整 Skill 内容用于同步。请不要上传密钥、私钥、Token、客户数据或其他敏感材料。",
     "privacy.usage": "Skill 内容用于账号存储、发布 manifest 生成、设备同步和质量检查，不用于模型训练。",
     "privacy.boundary": "平台只管理和分发 Skill 文件，不使用第三方模型 API 写作、改写、修复或生成 Skill 内容。",
@@ -301,6 +338,42 @@ function uid(prefix) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function showToast(message, duration = 3000) {
+  const existing = document.getElementById("toast");
+  if (existing) existing.remove();
+  
+  const toast = document.createElement("div");
+  toast.id = "toast";
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--accent);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+  `;
+  
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  `;
+  document.head.appendChild(style);
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s";
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 function loadState() {
@@ -531,6 +604,173 @@ function severityCost(severity) {
 
 function lineOf(content, index) {
   return content.slice(0, index).split(/\r?\n/).length;
+}
+
+// ============ GitHub Import Functions ============
+
+/**
+ * Parse GitHub URL or shorthand to extract repo and path
+ * Supports formats:
+ * - https://github.com/owner/repo/tree/branch/path
+ * - https://github.com/owner/repo/blob/branch/path
+ * - owner/repo
+ * - owner/repo/path/to/skill
+ */
+function parseGitHubInput(input) {
+  input = input.trim();
+  
+  // Full GitHub URL
+  const treeMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/(.+)/);
+  if (treeMatch) {
+    return {
+      repo: `${treeMatch[1]}/${treeMatch[2]}`,
+      branch: treeMatch[3],
+      path: treeMatch[4]
+    };
+  }
+  
+  const blobMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)/);
+  if (blobMatch) {
+    return {
+      repo: `${blobMatch[1]}/${blobMatch[2]}`,
+      branch: blobMatch[3],
+      path: blobMatch[4]
+    };
+  }
+  
+  // Shorthand: owner/repo or owner/repo/path
+  const shorthandMatch = input.match(/^([^/]+)\/([^/]+)(?:\/(.+))?$/);
+  if (shorthandMatch) {
+    return {
+      repo: `${shorthandMatch[1]}/${shorthandMatch[2]}`,
+      branch: "main",
+      path: shorthandMatch[3] || ""
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Fetch directory contents from GitHub API recursively
+ */
+async function fetchGitHubDirectory(repo, path, branch = "main") {
+  const result = {};
+  
+  async function fetchDir(dirPath) {
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${dirPath}${branch ? `?ref=${branch}` : ''}`;
+    
+    try {
+      const response = await fetch(apiUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const items = await response.json();
+      
+      for (const item of items) {
+        if (item.type === "file") {
+          // Fetch file content
+          const fileResponse = await fetch(item.download_url);
+          if (fileResponse.ok) {
+            const content = await fileResponse.text();
+            // Calculate size for binary detection (simple heuristic)
+            const isBinary = content.charCodeAt(0) === 0 || 
+              (content.length > 100 && /[\x00-\x08\x0E-\x1F]/.test(content.substring(0, 100)));
+            
+            result[item.path] = {
+              name: item.name,
+              path: item.path,
+              size: item.size,
+              sha: item.sha,
+              content: isBinary ? btoa(content) : content,
+              isBinary: isBinary,
+              download_url: item.download_url
+            };
+          }
+        } else if (item.type === "dir") {
+          // Recursively fetch subdirectory
+          await fetchDir(item.path);
+        }
+      }
+    } catch (error) {
+      throw new Error(`Failed to fetch ${dirPath}: ${error.message}`);
+    }
+  }
+  
+  await fetchDir(path);
+  return result;
+}
+
+/**
+ * Create a skill object from GitHub repository data
+ */
+function createSkillFromGitHub(repo, branch, files) {
+  // Find SKILL.md
+  let skillMdPath = null;
+  for (const [path, file] of Object.entries(files)) {
+    if (path.toLowerCase().endsWith("skill.md")) {
+      skillMdPath = path;
+      break;
+    }
+  }
+  
+  if (!skillMdPath) {
+    throw new Error(t("error.noSkillMd"));
+  }
+  
+  const skillMd = files[skillMdPath];
+  const content = skillMd.isBinary ? atob(skillMd.content) : skillMd.content;
+  const parsed = parseSkill(content, skillMdPath);
+  
+  // Extract skill name from path
+  const pathParts = skillMdPath.split("/");
+  const skillDirName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : parsed.meta.name || "unknown";
+  
+  // Build files object (excluding SKILL.md from content but keeping reference)
+  const skillFiles = {};
+  for (const [path, file] of Object.entries(files)) {
+    if (path !== skillMdPath) {
+      skillFiles[path] = {
+        name: file.name,
+        size: file.size,
+        sha: file.sha,
+        content: file.content,
+        isBinary: file.isBinary
+      };
+    }
+  }
+  
+  const skill = {
+    id: uid("skill"),
+    name: parsed.meta.name || skillDirName,
+    slug: slugify(parsed.meta.name || skillDirName),
+    version: parsed.meta.version || "0.0.0",
+    description: parsed.meta.description || "",
+    tags: parsed.meta.tags || [],
+    triggers: parsed.meta.triggers || [],
+    compatibility: parsed.meta.compatibility || { agents: ["generic"] },
+    riskLevel: parsed.meta.risk_level || "medium",
+    author: parsed.meta.author || "",
+    license: parsed.meta.license || "",
+    content: content,
+    sha256: hashString(content),
+    lifecycle: "draft",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    // GitHub-specific fields
+    source: {
+      type: "github",
+      repo: repo,
+      path: skillMdPath,
+      branch: branch,
+      url: `https://github.com/${repo}/tree/${branch}/${skillMdPath.split("/").slice(0, -1).join("/")}`
+    },
+    files: skillFiles
+  };
+  
+  skill.quality = runQualityGate(skill);
+  return skill;
 }
 
 function escapeHtml(value) {
@@ -926,6 +1166,132 @@ document.getElementById("skill-file").addEventListener("change", async (event) =
   event.target.value = "";
   render();
 });
+
+// Import dropdown menu toggle
+const importMenuBtn = document.getElementById("import-menu-btn");
+const importDropdownMenu = document.getElementById("import-dropdown-menu");
+const importGithubBtn = document.getElementById("import-github-btn");
+
+importMenuBtn.addEventListener("click", () => {
+  importDropdownMenu.classList.toggle("show");
+});
+
+document.addEventListener("click", (event) => {
+  if (!importMenuBtn.contains(event.target) && !importDropdownMenu.contains(event.target)) {
+    importDropdownMenu.classList.remove("show");
+  }
+});
+
+// GitHub import dialog
+const githubDialog = document.getElementById("github-import-dialog");
+const githubRepoInput = document.getElementById("github-repo");
+const githubPathInput = document.getElementById("github-path");
+const githubBranchInput = document.getElementById("github-branch");
+const githubPreviewBtn = document.getElementById("github-preview-btn");
+const githubImportBtn = document.getElementById("github-import-btn");
+const githubPreview = document.getElementById("github-import-preview");
+
+let githubFetchedFiles = null;
+
+importGithubBtn.addEventListener("click", () => {
+  importDropdownMenu.classList.remove("show");
+  githubRepoInput.value = "";
+  githubPathInput.value = "";
+  githubBranchInput.value = "";
+  githubPreviewBtn.disabled = false;
+  githubImportBtn.disabled = true;
+  githubPreview.hidden = true;
+  githubFetchedFiles = null;
+  githubDialog.showModal();
+});
+
+githubPreviewBtn.addEventListener("click", async () => {
+  const repo = githubRepoInput.value.trim();
+  const path = githubPathInput.value.trim();
+  const branch = githubBranchInput.value.trim() || "main";
+  
+  if (!repo || !path) {
+    alert(t("error.invalidUrl"));
+    return;
+  }
+  
+  githubPreview.hidden = false;
+  githubPreview.innerHTML = `<p class="loading">${t("loading.fetching")}</p>`;
+  githubPreviewBtn.disabled = true;
+  
+  try {
+    githubFetchedFiles = await fetchGitHubDirectory(repo, path, branch);
+    
+    const fileCount = Object.keys(githubFetchedFiles).length;
+    let html = `<h4>${fileCount} ${t("preview.fileCount").replace("{count}", fileCount)}</h4>`;
+    
+    // Group files by type
+    const skillFiles = [];
+    const otherFiles = [];
+    
+    for (const [filePath, file] of Object.entries(githubFetchedFiles)) {
+      if (filePath.toLowerCase().endsWith("skill.md")) {
+        skillFiles.push({ path: filePath, ...file });
+      } else {
+        otherFiles.push({ path: filePath, ...file });
+      }
+    }
+    
+    if (skillFiles.length > 0) {
+      html += `<h4>${t("preview.skills")}</h4><ul>`;
+      for (const f of skillFiles) {
+        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})</span></li>`;
+      }
+      html += `</ul>`;
+    }
+    
+    if (otherFiles.length > 0) {
+      html += `<h4>${t("preview.others")}</h4><ul>`;
+      for (const f of otherFiles.slice(0, 20)) { // Limit to first 20
+        html += `<li>${f.path} <span class="file-size">(${formatFileSize(f.size)})</span></li>`;
+      }
+      if (otherFiles.length > 20) {
+        html += `<li>... and ${otherFiles.length - 20} more files</li>`;
+      }
+      html += `</ul>`;
+    }
+    
+    githubPreview.innerHTML = html;
+    githubImportBtn.disabled = skillFiles.length === 0;
+    githubPreviewBtn.disabled = false;
+  } catch (error) {
+    githubPreview.innerHTML = `<p class="error">${t("error.fetchFailed")}: ${error.message}</p>`;
+    githubImportBtn.disabled = true;
+    githubPreviewBtn.disabled = false;
+  }
+});
+
+githubImportBtn.addEventListener("click", () => {
+  if (!githubFetchedFiles) return;
+  
+  const repo = githubRepoInput.value.trim();
+  const branch = githubBranchInput.value.trim() || "main";
+  
+  try {
+    const skill = createSkillFromGitHub(repo, branch, githubFetchedFiles);
+    state.skills.unshift(skill);
+    selectedSkillId = skill.id;
+    saveState();
+    githubDialog.close();
+    render();
+    
+    // Show success message
+    showToast(t("success.imported").replace("{name}", skill.name));
+  } catch (error) {
+    alert(error.message);
+  }
+});
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
 
 document.getElementById("create-pack").addEventListener("click", () => {
   openEntityDialog(t("dialog.newPack"), [

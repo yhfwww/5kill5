@@ -642,3 +642,114 @@ dialog::backdrop {
     font-size: 13px;
   }
 }
+
+/* Dropdown menu */
+.import-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 160px;
+  z-index: 1000;
+  padding: 4px 0;
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.dropdown-item span {
+  flex: 1;
+}
+
+/* GitHub import dialog */
+.github-import-preview {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.github-import-preview h4 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.github-import-preview ul {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.github-import-preview li {
+  margin: 4px 0;
+}
+
+.github-import-preview .file-size {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.github-import-preview .loading {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.github-import-preview .error {
+  color: var(--danger);
+}
+
+#github-import-fields .field {
+  margin-bottom: 12px;
+}
+
+#github-import-fields label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+#github-import-fields input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+#github-import-fields input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
