@@ -613,13 +613,17 @@ function lineOf(content, index) {
  * Supports formats:
  * - https://github.com/owner/repo/tree/branch/path
  * - https://github.com/owner/repo/blob/branch/path
+ * - https://github.com/owner/repo
  * - owner/repo
  * - owner/repo/path/to/skill
  */
 function parseGitHubInput(input) {
   input = input.trim();
   
-  // Full GitHub URL
+  // Remove protocol and trailing slash
+  input = input.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  
+  // Full GitHub URL with tree
   const treeMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/tree\/([^/]+)\/(.+)/);
   if (treeMatch) {
     return {
@@ -629,12 +633,23 @@ function parseGitHubInput(input) {
     };
   }
   
+  // Full GitHub URL with blob
   const blobMatch = input.match(/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)/);
   if (blobMatch) {
     return {
       repo: `${blobMatch[1]}/${blobMatch[2]}`,
       branch: blobMatch[3],
       path: blobMatch[4]
+    };
+  }
+  
+  // Just the repo URL: github.com/owner/repo
+  const repoOnlyMatch = input.match(/github\.com\/([^/]+)\/([^/]+)$/);
+  if (repoOnlyMatch) {
+    return {
+      repo: `${repoOnlyMatch[1]}/${repoOnlyMatch[2]}`,
+      branch: "main",
+      path: ""
     };
   }
   
@@ -1304,9 +1319,31 @@ importGithubBtn.addEventListener("click", () => {
 });
 
 githubPreviewBtn.addEventListener("click", async () => {
-  const repo = githubRepoInput.value.trim();
-  const path = githubPathInput.value.trim();
-  const branch = githubBranchInput.value.trim() || "main";
+  let repo = githubRepoInput.value.trim();
+  let path = githubPathInput.value.trim();
+  let branch = githubBranchInput.value.trim() || "main";
+  
+  // Parse repo input if it's a full URL
+  const repoParsed = parseGitHubInput(repo);
+  if (repoParsed) {
+    repo = repoParsed.repo;
+    if (!branch || branch === "main") {
+      branch = repoParsed.branch;
+    }
+  }
+  
+  // Parse path input if it's a full URL
+  const pathParsed = parseGitHubInput(path);
+  if (pathParsed) {
+    // If path input contains repo info, use it to override
+    if (!repoParsed) {
+      repo = pathParsed.repo;
+    }
+    path = pathParsed.path;
+    if (!branch || branch === "main") {
+      branch = pathParsed.branch;
+    }
+  }
   
   if (!repo || !path) {
     alert(t("error.invalidUrl"));
